@@ -1,0 +1,8 @@
+<resources>
+    <string name="accessibility_description">TalkText afișează bula de dictare lângă câmpul în care scrii și pune textul dictat la cursor. Citește doar câmpul activ, nu trimite conținutul ecranului nicăieri, nu apasă Trimite și nu scrie în câmpuri de parole.</string>
+    <string name="keyboard_name">TalkText</string>
+    <string name="subtype_ro">Română</string>
+    <string name="subtype_ru">Русский</string>
+    <string name="subtype_en">English</string>
+    <string name="spell_name">TalkText (română, engleză, rusă)</string>
+</resources>

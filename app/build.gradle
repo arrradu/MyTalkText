@@ -1,0 +1,7 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'ro.talktext'
+    compileSdk 35
+    defaultConfig { applicationId 'ro.talktext'; minSdk 33; targetSdk 35; versionCode 20; versionName '0.19' }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
