@@ -172,28 +172,40 @@ public final class Corrector {
         String near = "ru".equals(lex.lang) ? NEAR_SPACE_CYRILLIC : NEAR_SPACE_LATIN;
         splitBest = null;
         splitBestScore = Integer.MIN_VALUE;
-        split(skel, 0, lex, near, new ArrayList<>(), 0, true);
+        split(skel, 0, lex, near, new ArrayList<>(), 0, true, false);
         lastScore = splitBest == null ? Integer.MIN_VALUE : splitBestScore;
         return splitBest != null && splitBestScore >= (splitAllNear ? NEAR_SPLIT_MIN : MIN_SCORE) ? splitBest : null;
     }
 
     /** A split made only at letters next to the space bar may use rarer words ("suntbsetate" → "sunt setate"). */
     static final int NEAR_SPLIT_MIN = 220, NEAR_JOINT = 10, MISSED_JOINT = 70, THIRD_WORD = 120;
+    /** A part with one letter on a neighbouring key: it costs more and must be a common word. */
+    static final int FIXED_PART = 60, FIXED_PART_MIN = 400;
 
     private String splitBest;
     private int splitBestScore;
     private boolean splitAllNear;
 
-    /** Tries every way to cut skel[from..] into words; parts holds the words so far, penalty the joints' cost. */
-    private void split(String skel, int from, Lexicon lex, String near, List<String> parts, int penalty, boolean allNear) {
+    /**
+     * Tries every way to cut skel[from..] into words; parts holds the words so far, penalty the joints' cost.
+     * One part may also have one letter hit on a neighbouring key ("nubatiu" → "nu știu": b for the space, a for ș),
+     * but only when every joint is a letter next to the space bar.
+     */
+    private void split(String skel, int from, Lexicon lex, String near, List<String> parts, int penalty, boolean allNear, boolean fixed) {
         if (parts.size() >= 1) { // the rest as the last word
             String rest = skel.substring(from);
-            if (!rest.isEmpty()) {
+            boolean fixRest = false;
+            if (!rest.isEmpty() && !fixed && rare(rest, lex)) { // "atiu" exists, but so rarely that știu is meant
+                String f = fixPart(rest, lex);
+                if (f != null) { rest = f; fixRest = true; }
+                else if (lex.best(rest) == null) rest = null;
+            }
+            if (rest != null && !rest.isEmpty()) {
                 parts.add(rest);
                 int s = splitScore(parts, lex, allNear);
                 // Three words only when both joints are letters next to the space bar: two missed spaces are too unlikely.
-                int cost = penalty + (parts.size() - 2) * THIRD_WORD; // fewer words first: "vorbimnmaine" → "vorbim mâine", not "vorbim mai e"
-                if (s != Integer.MIN_VALUE && (parts.size() < 3 || allNear) && s - cost > splitBestScore) {
+                int cost = penalty + (parts.size() - 2) * THIRD_WORD + (fixRest ? FIXED_PART : 0); // fewer words first: "vorbimnmaine" → "vorbim mâine", not "vorbim mai e"
+                if (s != Integer.MIN_VALUE && (parts.size() < 3 || allNear) && (!(fixed || fixRest) || allNear) && s - cost > splitBestScore) {
                     splitBestScore = s - cost;
                     splitAllNear = allNear;
                     StringBuilder b = new StringBuilder();
@@ -206,14 +218,44 @@ public final class Corrector {
         if (parts.size() + 1 >= MAX_SPLIT_WORDS) return;
         for (int i = from + 1; i < skel.length(); i++) {
             String part = skel.substring(from, i);
+            boolean fix = false;
+            if (!fixed && rare(part, lex)) {
+                String f = fixPart(part, lex);
+                if (f != null) { part = f; fix = true; }
+            }
             if (lex.best(part) == null) continue;
+            int extra = fix ? FIXED_PART : 0;
             parts.add(part);
-            if (near.indexOf(skel.charAt(i)) >= 0 && i + 1 < skel.length()) split(skel, i + 1, lex, near, parts, penalty + NEAR_JOINT, allNear);
-            split(skel, i, lex, near, parts, penalty + MISSED_JOINT, false);
+            if (near.indexOf(skel.charAt(i)) >= 0 && i + 1 < skel.length()) split(skel, i + 1, lex, near, parts, penalty + NEAR_JOINT + extra, allNear, fixed || fix);
+            split(skel, i, lex, near, parts, penalty + MISSED_JOINT + extra, false, fixed || fix);
             parts.remove(parts.size() - 1);
         }
     }
 
+    /** Not a word, or too rare to be what was meant. */
+    private static boolean rare(String part, Lexicon lex) {
+        String w = lex.best(part);
+        return w == null || lex.zipf(w) < 250;
+    }
+
+    /** A word part with one letter hit on a neighbouring key, read as the most frequent real word (skeleton), or null. */
+    private static String fixPart(String part, Lexicon lex) {
+        if (part.length() < 3) return null;
+        boolean cyrillic = "ru".equals(lex.lang);
+        String alphabet = cyrillic ? CYRILLIC : LATIN;
+        String[] rows = cyrillic ? JCUKEN : QWERTY;
+        String best = null;
+        int bestZ = FIXED_PART_MIN - 1;
+        for (int i = 0; i < part.length(); i++)
+            for (int k = 0; k < alphabet.length(); k++) {
+                char ch = alphabet.charAt(k);
+                if (ch == part.charAt(i) || !adjacent(rows, part.charAt(i), ch)) continue;
+                String c = part.substring(0, i) + ch + part.substring(i + 1);
+                String w = lex.best(c);
+                if (w != null && lex.zipf(w) > bestZ) { bestZ = lex.zipf(w); best = c; }
+            }
+        return best;
+    }
 
     /**
      * All parts must be real words; one-letter parts only a, o, e; two-letter parts only if very common (în, să, eu…).

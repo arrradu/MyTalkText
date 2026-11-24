@@ -102,6 +102,13 @@ public class CorrectorTest {
         fix("transformatvautomat", ro, en, "transformat automat");
         fix("transformatautomat", ro, en, "transformat automat");
         fix("vorbimnmaine", ro, en, "vorbim mâine");
+        // Space bar hit as c/v/b/n/m: three words, rarer words, and one letter on a neighbouring key (0.20)
+        fix("mergebchiarvok", ro, en, "merge chiar ok");
+        fix("vezibsinsingur", ro, en, "vezi și singur");
+        fix("suntbsetate", ro, en, "sunt setate");
+        fix("Eubtiparesc", ro, en, "Eu tipăresc");
+        fix("nubatiu", ro, en, "nu știu");
+        fix("pentrubtine", ro, en, "pentru tine");
         List<String> two = c.suggest("inbunatatime", ro, en);
         check(two.contains("îmbunătățim") || two.contains("îmbunătățime"), "two mistakes: " + two);
         check(c.suggest("sugesriile", ro, en).contains("sugestiile"), "sugesriile: " + c.suggest("sugesriile", ro, en));
