@@ -145,6 +145,38 @@ public final class KeyLayout {
         return u;
     }
 
+    /**
+     * The space bar takes the lower part of the letter keys right above it (c v b n m on the Latin layout):
+     * thumbs aiming at the space land a little high, and "merge b chiar" turns into "mergebchiar".
+     * Gboard does the same.
+     */
+    public static final float SPACE_REACH = 0.3f;
+
+    /** The key under a touch. Touches on the gaps between keys hit the nearest key. Keys must be laid out (x, y, w, h). */
+    public static Key keyAt(List<List<Key>> rows, float x, float y) {
+        Key space = null;
+        for (List<Key> row : rows) for (Key k : row) if (k.code == SPACE) space = k;
+        if (space != null && x >= space.x && x < space.x + space.w && y < space.y && y >= space.y - SPACE_REACH * space.h) {
+            Key above = nearest(rows, x, y);
+            if (above != null && above.isLetter()) return space;
+        }
+        return nearest(rows, x, y);
+    }
+
+    private static Key nearest(List<List<Key>> rows, float x, float y) {
+        Key best = null;
+        float bestDist = Float.MAX_VALUE;
+        for (List<Key> row : rows)
+            for (Key k : row) {
+                if (k.code == GAP) continue;
+                if (k.contains(x, y)) return k;
+                float dx = Math.max(0, Math.max(k.x - x, x - (k.x + k.w))), dy = Math.max(0, Math.max(k.y - y, y - (k.y + k.h)));
+                float d = dx * dx + dy * dy;
+                if (d < bestDist) { bestDist = d; best = k; }
+            }
+        return best;
+    }
+
     /** What a letter key types (and shows) with Shift on. */
     public static String shifted(String s, boolean upper) {
         return upper ? s.toUpperCase(Locale.ROOT) : s;

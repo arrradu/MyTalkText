@@ -2,7 +2,7 @@
 from pathlib import Path
 import shutil, subprocess, sys, zipfile, xml.etree.ElementTree as ET
 
-VERSION_CODE, VERSION_NAME = '20', '0.19'
+VERSION_CODE, VERSION_NAME = '21', '0.20'
 root = Path(__file__).resolve().parent
 tools = Path(r'C:\Users\AdrianRADUARTINOX\Desktop\WORK\My\Lynk&Co900_engeneering\apk_translation_study\ro_4.2.8\tools')
 bt = tools / 'sdk-build-tools/android-15'

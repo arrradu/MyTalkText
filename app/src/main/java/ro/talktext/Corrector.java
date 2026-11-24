@@ -160,36 +160,78 @@ public final class Corrector {
 
     private static final String NEAR_SPACE_LATIN = "cvbnm", NEAR_SPACE_CYRILLIC = "смитьб";
 
-    /** The best way to read the word as two words. Sets lastScore (the rarer part's frequency minus a penalty). */
+    /** Up to three words run together ("vezibsinsingur" → "vezi și singur"). */
+    static final int MAX_SPLIT_WORDS = 3;
+
+    /**
+     * The best way to read the word as two or three words. Sets lastScore (the rarest part's frequency minus a penalty
+     * per joint). A joint is a letter next to the space bar typed instead of the space (c/v/b/n/m, cheaper and with
+     * rarer parts allowed, since the finger clearly aimed at the space) or a space simply missed.
+     */
     private String bestSplit(String skel, Lexicon lex) {
         String near = "ru".equals(lex.lang) ? NEAR_SPACE_CYRILLIC : NEAR_SPACE_LATIN;
-        String best = null;
-        int bestScore = Integer.MIN_VALUE;
-        for (int i = 1; i < skel.length(); i++) {
-            if (near.indexOf(skel.charAt(i)) >= 0 && i + 1 < skel.length()) { // a letter next to the space bar instead of the space
-                int s = minus(splitScore(skel.substring(0, i), skel.substring(i + 1), lex), 40);
-                if (s > bestScore) { bestScore = s; best = lex.best(skel.substring(0, i)) + " " + lex.best(skel.substring(i + 1)); }
-            }
-            int s = minus(splitScore(skel.substring(0, i), skel.substring(i), lex), 70); // the space simply missed
-            if (s > bestScore) { bestScore = s; best = lex.best(skel.substring(0, i)) + " " + lex.best(skel.substring(i)); }
-        }
-        lastScore = best == null ? Integer.MIN_VALUE : bestScore;
-        return bestScore >= MIN_SCORE ? best : null;
+        splitBest = null;
+        splitBestScore = Integer.MIN_VALUE;
+        split(skel, 0, lex, near, new ArrayList<>(), 0, true);
+        lastScore = splitBest == null ? Integer.MIN_VALUE : splitBestScore;
+        return splitBest != null && splitBestScore >= (splitAllNear ? NEAR_SPLIT_MIN : MIN_SCORE) ? splitBest : null;
     }
 
-    /** A penalty that keeps "impossible" impossible (no wrap-around below Integer.MIN_VALUE). */
-    private static int minus(int score, int penalty) { return score == Integer.MIN_VALUE ? score : score - penalty; }
+    /** A split made only at letters next to the space bar may use rarer words ("suntbsetate" → "sunt setate"). */
+    static final int NEAR_SPLIT_MIN = 220, NEAR_JOINT = 10, MISSED_JOINT = 70, THIRD_WORD = 120;
 
-    /** Both parts must be real, common words; one- and two-letter parts only if very common (a, o, în, să…). */
-    private static int splitScore(String left, String right, Lexicon lex) {
-        String l = lex.best(left), r = lex.best(right);
-        if (l == null || r == null) return Integer.MIN_VALUE;
-        int zl = lex.zipf(l), zr = lex.zipf(r);
-        if ((left.length() == 1 && "aoe".indexOf(left.charAt(0)) < 0) || (right.length() == 1 && "aoe".indexOf(right.charAt(0)) < 0))
-            return Integer.MIN_VALUE; // single letters are words only as a, o, e
-        if ((left.length() <= 2 && zl < 600) || (right.length() <= 2 && zr < 600)) return Integer.MIN_VALUE;
-        if (zl < 350 || zr < 350) return Integer.MIN_VALUE;
-        return Math.min(zl, zr);
+    private String splitBest;
+    private int splitBestScore;
+    private boolean splitAllNear;
+
+    /** Tries every way to cut skel[from..] into words; parts holds the words so far, penalty the joints' cost. */
+    private void split(String skel, int from, Lexicon lex, String near, List<String> parts, int penalty, boolean allNear) {
+        if (parts.size() >= 1) { // the rest as the last word
+            String rest = skel.substring(from);
+            if (!rest.isEmpty()) {
+                parts.add(rest);
+                int s = splitScore(parts, lex, allNear);
+                // Three words only when both joints are letters next to the space bar: two missed spaces are too unlikely.
+                int cost = penalty + (parts.size() - 2) * THIRD_WORD; // fewer words first: "vorbimnmaine" → "vorbim mâine", not "vorbim mai e"
+                if (s != Integer.MIN_VALUE && (parts.size() < 3 || allNear) && s - cost > splitBestScore) {
+                    splitBestScore = s - cost;
+                    splitAllNear = allNear;
+                    StringBuilder b = new StringBuilder();
+                    for (String p : parts) b.append(b.length() == 0 ? "" : " ").append(lex.best(p));
+                    splitBest = b.toString();
+                }
+                parts.remove(parts.size() - 1);
+            }
+        }
+        if (parts.size() + 1 >= MAX_SPLIT_WORDS) return;
+        for (int i = from + 1; i < skel.length(); i++) {
+            String part = skel.substring(from, i);
+            if (lex.best(part) == null) continue;
+            parts.add(part);
+            if (near.indexOf(skel.charAt(i)) >= 0 && i + 1 < skel.length()) split(skel, i + 1, lex, near, parts, penalty + NEAR_JOINT, allNear);
+            split(skel, i, lex, near, parts, penalty + MISSED_JOINT, false);
+            parts.remove(parts.size() - 1);
+        }
+    }
+
+
+    /**
+     * All parts must be real words; one-letter parts only a, o, e; two-letter parts only if very common (în, să, eu…).
+     * When every joint is a letter next to the space bar, rarer words are allowed (setate, tipăresc).
+     */
+    private static int splitScore(List<String> parts, Lexicon lex, boolean allNear) {
+        int min = Integer.MAX_VALUE;
+        int floor = allNear ? 250 : 350, shortFloor = allNear ? 450 : 600;
+        for (String p : parts) {
+            String w = lex.best(p);
+            if (w == null) return Integer.MIN_VALUE;
+            int z = lex.zipf(w);
+            if (p.length() == 1 && "aoe".indexOf(p.charAt(0)) < 0) return Integer.MIN_VALUE;
+            if (p.length() <= 2 && z < shortFloor) return Integer.MIN_VALUE;
+            if (z < floor) return Integer.MIN_VALUE;
+            min = Math.min(min, z);
+        }
+        return min;
     }
 
     /**

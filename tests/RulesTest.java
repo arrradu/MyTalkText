@@ -99,6 +99,23 @@ public class RulesTest {
         check(KeyLayout.rows(0, true).get(0).get(0).out.equals("й"), "Russian layout starts with й");
         check(KeyLayout.shifted("ș", true).equals("Ș"), "capital Ș");
 
+        // The space bar reaches into the lower part of the letters above it (c v b n m), not into other keys
+        java.util.List<java.util.List<KeyLayout.Key>> kb = KeyLayout.rows(0, false);
+        float rowH = 54;
+        for (int i = 0; i < kb.size(); i++) {
+            float unit = 360f / KeyLayout.units(kb.get(i)), x = 0;
+            for (KeyLayout.Key k : kb.get(i)) { k.x = x; k.y = i * rowH; k.w = k.units * unit; k.h = rowH; x += k.w; }
+        }
+        KeyLayout.Key b = keyOf(kb, "b"), space = null, shiftKey = kb.get(2).get(0);
+        for (KeyLayout.Key k : kb.get(3)) if (k.code == KeyLayout.SPACE) space = k;
+        float bx = b.x + b.w / 2;
+        check(KeyLayout.keyAt(kb, bx, b.y + rowH * 0.5f) == b, "middle of b is b");
+        check(KeyLayout.keyAt(kb, bx, b.y + rowH * 0.85f) == space, "bottom of b goes to the space bar");
+        check(KeyLayout.keyAt(kb, bx, space.y + 5) == space, "space is space");
+        check(KeyLayout.keyAt(kb, shiftKey.x + 5, shiftKey.y + rowH * 0.9f) == shiftKey, "bottom of Shift stays Shift");
+        KeyLayout.Key m = keyOf(kb, "m");
+        check(KeyLayout.keyAt(kb, m.x + m.w * 0.8f, m.y + rowH * 0.9f) == m, "m past the end of the space bar stays m");
+
         // Swipe-to-delete: whole words from the cursor back, with their spaces
         check(Spacing.wordsBack("Salut Eugen, ce faci ", 1) == 5, "one word: faci + space");
         check(Spacing.wordsBack("Salut Eugen, ce faci ", 2) == 8, "two words");
@@ -115,6 +132,11 @@ public class RulesTest {
         check(ClipHistory.add(clips, "   ").equals(clips), "blank ignored");
 
         System.out.println(passed + " checks passed");
+    }
+
+    static KeyLayout.Key keyOf(java.util.List<java.util.List<KeyLayout.Key>> rows, String letter) {
+        for (java.util.List<KeyLayout.Key> row : rows) for (KeyLayout.Key k : row) if (letter.equals(k.out)) return k;
+        throw new AssertionError("no key " + letter);
     }
 
     static java.util.List<String> altsOf(String letter) {

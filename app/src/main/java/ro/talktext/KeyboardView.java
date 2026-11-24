@@ -339,19 +339,7 @@ final class KeyboardView extends View {
 
     // ---- touch ----
 
-    private KeyLayout.Key keyAt(float x, float y) {
-        KeyLayout.Key best = null;
-        float bestDist = Float.MAX_VALUE;
-        for (List<KeyLayout.Key> row : rows)
-            for (KeyLayout.Key k : row) {
-                if (k.code == KeyLayout.GAP) continue;
-                if (k.contains(x, y)) return k;
-                float dx = Math.max(0, Math.max(k.x - x, x - (k.x + k.w))), dy = Math.max(0, Math.max(k.y - y, y - (k.y + k.h)));
-                float d = dx * dx + dy * dy;
-                if (d < bestDist) { bestDist = d; best = k; }
-            }
-        return best; // touches on the gaps between keys still hit the nearest key
-    }
+    private KeyLayout.Key keyAt(float x, float y) { return KeyLayout.keyAt(rows, x, y); }
 
     @Override public boolean onTouchEvent(MotionEvent e) {
         int action = e.getActionMasked();
